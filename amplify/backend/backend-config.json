@@ -21,5 +21,23 @@
       "providerPlugin": "awscloudformation",
       "service": "Lambda"
     }
+  },
+  "parameters": {
+    "AMPLIFY_function_cloudgenai_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "cloudgenai"
+        }
+      ]
+    },
+    "AMPLIFY_function_cloudgenai_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "cloudgenai"
+        }
+      ]
+    }
   }
 }
