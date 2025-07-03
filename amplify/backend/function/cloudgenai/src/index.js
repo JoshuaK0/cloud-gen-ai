@@ -1,18 +1,16 @@
-// index.js
-
 const { SecretsManagerClient, GetSecretValueCommand } = require("@aws-sdk/client-secrets-manager");
 const { BedrockRuntimeClient, InvokeModelCommand } = require("@aws-sdk/client-bedrock-runtime");
 
-// ── CONFIG ─────────────────────────────────────────────────────────────────────
+//CONFIG
 const REGION           = "eu-north-1";
 const OPENAI_SECRET_ID = "/cloudgenai/openai-api-key";
 const NOVA_PROFILE_ARN = "arn:aws:bedrock:eu-north-1:900808296174:inference-profile/eu.amazon.nova-micro-v1:0";
 
-// ── CLIENTS ────────────────────────────────────────────────────────────────────
+//CLIENTS
 const sm      = new SecretsManagerClient({ region: REGION });
 const bedrock = new BedrockRuntimeClient({ region: REGION });
 
-// ── CACHE OPENAI KEY ───────────────────────────────────────────────────────────
+//CACHE OPENAI KEY
 let cachedOpenAIKey = null;
 async function getOpenAIKey() {
   if (cachedOpenAIKey) return cachedOpenAIKey;
@@ -22,13 +20,12 @@ async function getOpenAIKey() {
   return cachedOpenAIKey;
 }
 
-// ── HANDLER ────────────────────────────────────────────────────────────────────
+// HANDLER
 exports.handler = async (event) => {
   try {
     const body = JSON.parse(event.body || "{}");
     let reply;
 
-    // — OpenAI path —
     if (body.openai) {
       const key = await getOpenAIKey();
       const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -54,7 +51,6 @@ exports.handler = async (event) => {
       reply = data.choices[0].message.content;
     }
 
-    // — Bedrock Nova-Micro via inference profile —
     else if (body.bedrock) {
       const payload = {
         inferenceConfig: { max_new_tokens: 1000 },
@@ -64,7 +60,7 @@ exports.handler = async (event) => {
       };
 
       const cmd = new InvokeModelCommand({
-        modelId:     NOVA_PROFILE_ARN,      // inference-profile ARN in modelId
+        modelId:     NOVA_PROFILE_ARN,   
         contentType: "application/json",
         accept:      "application/json",
         body:        JSON.stringify(payload)
@@ -74,7 +70,6 @@ exports.handler = async (event) => {
       const text = await resp.body.transformToString();
       const data = JSON.parse(text);
 
-      // Extract from data.output.message.content[0].text
       const assistantMsg = data.output?.message?.content?.[0]?.text;
       if (!assistantMsg) {
         console.error("Unexpected Nova-Micro payload:", JSON.stringify(data));
@@ -83,7 +78,7 @@ exports.handler = async (event) => {
       reply = assistantMsg;
     }
 
-    // — No prompt provided —
+    //No Prompt :(
     else {
       return {
         statusCode: 400,
@@ -92,7 +87,7 @@ exports.handler = async (event) => {
       };
     }
 
-    // — Success —
+    //Sucess :)
     return {
       statusCode: 200,
       headers:    { "Access-Control-Allow-Origin": "*" },
