@@ -2,9 +2,42 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>My Amplify Demo</title>
+    <title>ChatGPT Proxy Demo</title>
   </head>
   <body>
-    <h1>Hello, Amplify!</h1>
+    <h1>Ask ChatGPT</h1>
+    <form id="chat-form">
+      <input
+        type="text"
+        id="user-input"
+        placeholder="Type something…"
+        required
+      />
+      <button type="submit">Send</button>
+    </form>
+    <pre id="response"></pre>
+
+    <script>
+      const apiUrl = "https://abc123.execute-api.eu-west-2.amazonaws.com"; // your API Gateway URL
+
+      document
+        .getElementById("chat-form")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const message = document.getElementById("user-input").value;
+          document.getElementById("response").textContent = "…thinking…";
+          try {
+            const res = await fetch(apiUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ message }),
+            });
+            const { reply, error } = await res.json();
+            document.getElementById("response").textContent = error || reply;
+          } catch (err) {
+            document.getElementById("response").textContent = err.message;
+          }
+        });
+    </script>
   </body>
 </html>

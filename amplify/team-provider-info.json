@@ -1,0 +1,20 @@
+{
+  "dev": {
+    "awscloudformation": {
+      "AuthRoleName": "amplify-cloudgenai-dev-9f413-authRole",
+      "UnauthRoleArn": "arn:aws:iam::900808296174:role/amplify-cloudgenai-dev-9f413-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::900808296174:role/amplify-cloudgenai-dev-9f413-authRole",
+      "Region": "eu-north-1",
+      "DeploymentBucketName": "amplify-cloudgenai-dev-9f413-deployment",
+      "UnauthRoleName": "amplify-cloudgenai-dev-9f413-unauthRole",
+      "StackName": "amplify-cloudgenai-dev-9f413",
+      "StackId": "arn:aws:cloudformation:eu-north-1:900808296174:stack/amplify-cloudgenai-dev-9f413/7aade340-57ec-11f0-996e-0ed7e2fc331f",
+      "AmplifyAppId": "d2060k59btnu6m"
+    },
+    "categories": {
+      "function": {
+        "cloudgenai": {}
+      }
+    }
+  }
+}
