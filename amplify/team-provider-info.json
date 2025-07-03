@@ -15,7 +15,7 @@
       "function": {
         "cloudgenai": {
           "deploymentBucketName": "amplify-cloudgenai-dev-9f413-deployment",
-          "s3Key": "amplify-builds/cloudgenai-4d69597043695a306238-build.zip"
+          "s3Key": "amplify-builds/cloudgenai-6b4336672f564a594179-build.zip"
         }
       },
       "api": {

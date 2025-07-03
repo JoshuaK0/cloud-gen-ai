@@ -2,41 +2,60 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>ChatGPT Proxy Demo</title>
+    <title>Multi-Model Chat Demo</title>
   </head>
   <body>
-    <h1>Ask ChatGPT</h1>
+    <h1>Ask a Model</h1>
     <form id="chat-form">
-      <input
-        type="text"
-        id="user-input"
-        placeholder="Type something…"
-        required
-      />
+      <div>
+        <label for="openai-input">OpenAI Prompt:</label>
+        <input type="text" id="openai-input" placeholder="Type for ChatGPT…" />
+      </div>
+      <div>
+        <label for="bedrock-input">Bedrock Prompt:</label>
+        <input type="text" id="bedrock-input" placeholder="Type for Bedrock…" />
+      </div>
       <button type="submit">Send</button>
     </form>
     <pre id="response"></pre>
 
     <script>
       const apiUrl =
-        " https://6dgmhz0i98.execute-api.eu-north-1.amazonaws.com/dev/userprompts"; // your API Gateway URL
-
+        "https://6dgmhz0i98.execute-api.eu-north-1.amazonaws.com/dev/userprompts";
       document
         .getElementById("chat-form")
         .addEventListener("submit", async (e) => {
           e.preventDefault();
-          const message = document.getElementById("user-input").value;
+          const openaiMsg = document
+            .getElementById("openai-input")
+            .value.trim();
+          const bedrockMsg = document
+            .getElementById("bedrock-input")
+            .value.trim();
           document.getElementById("response").textContent = "…thinking…";
+
+          // Build payload: only include the non-empty prompt
+          const payload = {};
+          if (openaiMsg) payload.openai = openaiMsg;
+          if (bedrockMsg) payload.bedrock = bedrockMsg;
+
           try {
             const res = await fetch(apiUrl, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ message }),
+              body: JSON.stringify(payload),
             });
-            const { reply, error } = await res.json();
-            document.getElementById("response").textContent = error || reply;
+            const data = await res.json();
+            if (data.error) {
+              document.getElementById("response").textContent =
+                "Error: " + data.error;
+            } else {
+              // data.reply will be a string
+              document.getElementById("response").textContent = data.reply;
+            }
           } catch (err) {
-            document.getElementById("response").textContent = err.message;
+            document.getElementById("response").textContent =
+              "Fetch error: " + err.message;
           }
         });
     </script>
