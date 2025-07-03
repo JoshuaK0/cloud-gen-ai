@@ -1,107 +1,110 @@
 // index.js
 
-const { SecretsManagerClient, GetSecretValueCommand } =
-  require("@aws-sdk/client-secrets-manager");
-const { BedrockRuntimeClient, InvokeModelCommand } =
-  require("@aws-sdk/client-bedrock-runtime"); // AWS SDK v3
+const { SecretsManagerClient, GetSecretValueCommand } = require("@aws-sdk/client-secrets-manager");
+const { BedrockRuntimeClient, InvokeModelCommand } = require("@aws-sdk/client-bedrock-runtime");
 
-// Region
-const REGION = "eu-north-1";
+// ── CONFIG ─────────────────────────────────────────────────────────────────────
+const REGION           = "eu-north-1";
+const OPENAI_SECRET_ID = "/cloudgenai/openai-api-key";
+const NOVA_PROFILE_ARN = "arn:aws:bedrock:eu-north-1:900808296174:inference-profile/eu.amazon.nova-micro-v1:0";
 
-// Secrets Manager client for OpenAI key
-const sm = new SecretsManagerClient({ region: REGION });
+// ── CLIENTS ────────────────────────────────────────────────────────────────────
+const sm      = new SecretsManagerClient({ region: REGION });
+const bedrock = new BedrockRuntimeClient({ region: REGION });
+
+// ── CACHE OPENAI KEY ───────────────────────────────────────────────────────────
 let cachedOpenAIKey = null;
 async function getOpenAIKey() {
   if (cachedOpenAIKey) return cachedOpenAIKey;
-  const resp = await sm.send(
-    new GetSecretValueCommand({ SecretId: "/cloudgenai/openai-api-key" })
-  );
+  const resp   = await sm.send(new GetSecretValueCommand({ SecretId: OPENAI_SECRET_ID }));
   const secret = JSON.parse(resp.SecretString);
   cachedOpenAIKey = secret.OPENAI_API_KEY;
   return cachedOpenAIKey;
 }
 
-// Bedrock client
-const bedrock = new BedrockRuntimeClient({ region: REGION });
-
+// ── HANDLER ────────────────────────────────────────────────────────────────────
 exports.handler = async (event) => {
   try {
     const body = JSON.parse(event.body || "{}");
     let reply;
 
-    // 1) If openai prompt provided, call OpenAI REST API:
+    // — OpenAI path —
     if (body.openai) {
       const key = await getOpenAIKey();
-      const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
+      const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+        method:  "POST",
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type":  "application/json",
           "Authorization": `Bearer ${key}`
         },
         body: JSON.stringify({
-          model: "gpt-4o-mini",
+          model:    "gpt-4o-mini",
           messages: [{ role: "user", content: body.openai }]
         })
       });
-      const aiData = await aiRes.json();
-      if (aiData.error?.code === "insufficient_quota") {
+      const data = await openaiRes.json();
+      if (data.error?.code === "insufficient_quota") {
         return {
           statusCode: 402,
-          headers: { "Access-Control-Allow-Origin": "*" },
-          body: JSON.stringify({
-            error: "Your billing quota has been exceeded. Please check your plan."
-          })
+          headers:    { "Access-Control-Allow-Origin": "*" },
+          body:       JSON.stringify({ error: "Your billing quota has been exceeded." })
         };
       }
-      if (!aiRes.ok) {
-        throw new Error(aiData.error?.message || "OpenAI API error");
-      }
-      reply = aiData.choices[0].message.content;
+      if (!openaiRes.ok) throw new Error(data.error?.message || "OpenAI API error");
+      reply = data.choices[0].message.content;
     }
-    // 2) Else if bedrock prompt provided, invoke Bedrock:
+
+    // — Bedrock Nova-Micro via inference profile —
     else if (body.bedrock) {
-      const params = {
-        modelId: "amazon.titan-embed-text-v2:0",  // or your chosen Bedrock model
+      const payload = {
+        inferenceConfig: { max_new_tokens: 1000 },
+        messages: [
+          { role: "user", content: [{ text: body.bedrock }] }
+        ]
+      };
+
+      const cmd = new InvokeModelCommand({
+        modelId:     NOVA_PROFILE_ARN,      // inference-profile ARN in modelId
         contentType: "application/json",
         accept:      "application/json",
-        body: JSON.stringify({
-          prompt: body.bedrock,
-          max_tokens_to_sample: 512
-        })
-      };
-      const cmd = new InvokeModelCommand(params);
+        body:        JSON.stringify(payload)
+      });
+
       const resp = await bedrock.send(cmd);
-      // resp.body is a stream; convert to string
-      const stream = resp.body;
-      const chunks = [];
-      for await (let chunk of stream) chunks.push(typeof chunk === "string" ? chunk : chunk.toString());
-      const text = chunks.join("");
-      // Bedrock responses often come back as { completion: "..." }
-      const parsed = JSON.parse(text);
-      reply = parsed.completion || parsed.choices?.[0]?.delta?.content || "";
+      const text = await resp.body.transformToString();
+      const data = JSON.parse(text);
+
+      // Extract from data.output.message.content[0].text
+      const assistantMsg = data.output?.message?.content?.[0]?.text;
+      if (!assistantMsg) {
+        console.error("Unexpected Nova-Micro payload:", JSON.stringify(data));
+        throw new Error("Invalid Nova-Micro response schema");
+      }
+      reply = assistantMsg;
     }
-    // 3) Neither provided
+
+    // — No prompt provided —
     else {
       return {
         statusCode: 400,
-        headers: { "Access-Control-Allow-Origin": "*" },
-        body: JSON.stringify({ error: "No prompt provided." })
+        headers:    { "Access-Control-Allow-Origin": "*" },
+        body:       JSON.stringify({ error: "No prompt provided; use either ‘openai’ or ‘bedrock’." })
       };
     }
 
-    // 200 OK
+    // — Success —
     return {
       statusCode: 200,
-      headers: { "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({ reply })
+      headers:    { "Access-Control-Allow-Origin": "*" },
+      body:       JSON.stringify({ reply })
     };
 
   } catch (err) {
     console.error("Handler error:", err);
     return {
       statusCode: 500,
-      headers: { "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({ error: err.message })
+      headers:    { "Access-Control-Allow-Origin": "*" },
+      body:       JSON.stringify({ error: err.message })
     };
   }
 };
